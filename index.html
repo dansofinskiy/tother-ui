@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Поиск редактора</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .forms-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .form-card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .form-card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .results-container {
+            display: none;
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #eee;
+        }
+
+        .results-container.show {
+            display: block;
+        }
+
+        .results-container h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            font-weight: 500;
+            margin: 20px 0;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .results-section {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .results-section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .result-list {
+            list-style: none;
+        }
+
+        .result-item {
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #667eea;
+            border-radius: 5px;
+            transition: background 0.2s;
+        }
+
+        .result-item:hover {
+            background: #f0f0f0;
+        }
+
+        .player-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .copy-id-btn {
+            padding: 6px 10px;
+            border: 1px solid #667eea;
+            background: transparent;
+            color: #667eea;
+            border-radius: 5px;
+            font-size: 0.9em;
+            cursor: pointer;
+            white-space: nowrap;
+            width: auto;
+        }
+
+        .copy-id-btn:hover {
+            background: #f0f4ff;
+        }
+
+        .player-link {
+            text-decoration: none;
+            color: #667eea;
+            font-weight: 500;
+            transition: color 0.2s;
+            display: block;
+            padding: 5px 0;
+        }
+
+        .player-link:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        .player-item .item-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+
+        .item-detail {
+            color: #666;
+            font-size: 0.95em;
+            margin: 4px 0;
+        }
+
+        .detail-label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .no-results {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+            font-size: 1em;
+        }
+
+        .stats {
+            background: #f0f4ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            font-size: 0.95em;
+            color: #555;
+        }
+
+        .stats-item {
+            margin: 5px 0;
+        }
+
+        @media (max-width: 768px) {
+            .forms-section {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .form-card {
+                padding: 20px;
+            }
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏆 Играл ли я этого редактора?</h1>
+
+        <div class="forms-section">
+            <!-- Form 1: Player Search -->
+            <div class="form-card">
+                <h2>🔍 Поиск ID по фамилии</h2>
+                <form id="playerForm">
+                    <div class="form-group">
+                        <label for="surname">Фамилия</label>
+                        <input
+                            type="text"
+                            id="surname"
+                            name="surname"
+                            placeholder="e.g., Рождествин"
+                            required
+                        >
+                    </div>
+                    <button type="submit">Искать</button>
+                </form>
+                <div class="loading" id="playerLoading">
+                    <span class="spinner"></span>Поиск...
+                </div>
+                <div class="error" id="playerError"></div>
+
+                <!-- Player Results -->
+                <div class="results-container" id="playerResultsContainer">
+                    <h3>Результат</h3>
+                    <div id="playersResultsList"></div>
+                </div>
+            </div>
+
+            <!-- Form 2: Tournament Intersection -->
+            <div class="form-card">
+                <h2>⚡ Сыгранные турниры</h2>
+                <form id="intersectionForm">
+                    <div class="form-group">
+                        <label for="playerId">Ваш ID</label>
+                        <input
+                            type="number"
+                            id="playerId"
+                            name="playerId"
+                            placeholder="e.g., 1234"
+                            required
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="editorId">ID редактора</label>
+                        <input
+                            type="number"
+                            id="editorId"
+                            name="editorId"
+                            placeholder="e.g., 27009"
+                            required
+                        >
+                    </div>
+                    <button type="submit">Искать турниры</button>
+                </form>
+                <div class="loading" id="intersectionLoading">
+                    <span class="spinner"></span>Поиск...
+                </div>
+                <div class="error" id="intersectionError"></div>
+
+                <!-- Tournament Results -->
+                <div class="results-container" id="tournamentResultsContainer">
+                    <h3>Результаты</h3>
+                    <div id="tournamentsResultsList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://jmdw1qbyh8.execute-api.eu-north-1.amazonaws.com/tother-app'; // Change this to your Lambda API endpoint
+
+        // Player Form Handler
+        document.getElementById('playerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const surname = document.getElementById('surname').value;
+
+            showLoading('player');
+            clearError('player');
+
+            try {
+                // Properly encode the Cyrillic surname
+                const url = new URL(API_URL);
+                url.searchParams.append('surname', surname);
+
+                const response = await fetch(url.toString());
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                displayPlayers(data);
+            } catch (error) {
+                showError('player', error.message);
+                displayPlayers([]);
+            } finally {
+                hideLoading('player');
+            }
+        });
+
+        // Intersection Form Handler
+        document.getElementById('intersectionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const playerId = document.getElementById('playerId').value;
+            const editorId = document.getElementById('editorId').value;
+
+            showLoading('intersection');
+            clearError('intersection');
+
+            try {
+                const url = new URL(API_URL);
+                url.searchParams.append('playerId', playerId);
+                url.searchParams.append('editorId', editorId);
+
+                const response = await fetch(url.toString());
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                displayTournaments(data);
+            } catch (error) {
+                showError('intersection', error.message);
+                displayTournaments([]);
+            } finally {
+                hideLoading('intersection');
+            }
+        });
+
+        // Display Players
+        function displayPlayers(players) {
+            const container = document.getElementById('playerResultsContainer');
+            const listContainer = document.getElementById('playersResultsList');
+
+            if (!Array.isArray(players) || players.length === 0) {
+                listContainer.innerHTML = '<div class="no-results">No players found</div>';
+                container.classList.add('show');
+                return;
+            }
+
+            const html = `
+                <ul class="result-list">
+                    ${players.map(player => `
+                        <li class="result-item player-row">
+                            <a href="https://rating.chgk.gg/b/player/${player.id}" target="_blank" class="player-link">
+                                ${player.id} ${player.surname} ${player.name} ${player.patronymic || ''}
+                            </a>
+                            <button type="button" class="copy-id-btn" data-player-id="${player.id}" title="Скопировать ID редактора" aria-label="Скопировать ID редактора">⧉</button>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+
+            listContainer.innerHTML = html;
+            container.classList.add('show');
+
+            // Wire copy buttons
+            listContainer.querySelectorAll('.copy-id-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const editorIdField = document.getElementById('editorId');
+                    const playerId = button.getAttribute('data-player-id');
+                    editorIdField.value = playerId;
+                    editorIdField.focus();
+                });
+            });
+        }
+
+        // Display Tournaments
+        function displayTournaments(tournaments) {
+            const container = document.getElementById('tournamentResultsContainer');
+            const listContainer = document.getElementById('tournamentsResultsList');
+
+            if (!Array.isArray(tournaments) || tournaments.length === 0) {
+                listContainer.innerHTML = '<div class="no-results">Вы не сыграли ни одного турнира :(</div>';
+                container.classList.add('show');
+                return;
+            }
+
+            // Format date from ISO 8601 (e.g., 2024-12-15T00:00:00+03:00) to dd.MM.yyyy
+            function formatDate(dateString) {
+                if (!dateString) return 'N/A';
+                try {
+                    const date = new Date(dateString);
+                    if (isNaN(date.getTime())) return 'N/A';
+
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const year = date.getFullYear();
+
+                    return `${day}.${month}.${year}`;
+                } catch (e) {
+                    return 'N/A';
+                }
+            }
+
+            // Get newest and oldest dates
+            const tournamentsWithDate = tournaments.filter(t => t.dateEnd);
+            const newest = tournamentsWithDate.length > 0 ? formatDate(tournamentsWithDate[0].dateEnd) : 'N/A';
+            const oldest = tournamentsWithDate.length > 0 ? formatDate(tournamentsWithDate[tournamentsWithDate.length - 1].dateEnd) : 'N/A';
+
+            const html = `
+                <ul class="result-list">
+                    ${tournaments.map(tournament => `
+                        <li class="result-item">
+                            <a href="https://rating.chgk.gg/b/${tournament.id}" target="_blank" class="player-link">
+                                ${tournament.id} ${tournament.name}
+                            </a>
+                            <div class="item-detail">
+                                ${formatDate(tournament.dateEnd)}
+                            </div>
+                        </li>
+                    `).join('')}
+                </ul>
+                <div class="stats">
+                    <div class="stats-item"><strong>Всего:</strong> ${tournaments.length}</div>
+                    <div class="stats-item"><strong>Последний:</strong> ${newest}</div>
+                    <div class="stats-item"><strong>Первый:</strong> ${oldest}</div>
+                </div>
+            `;
+
+            listContainer.innerHTML = html;
+            container.classList.add('show');
+        }
+
+        // UI Helpers
+        function showLoading(type) {
+            document.getElementById(`${type}Loading`).classList.add('show');
+        }
+
+        function hideLoading(type) {
+            document.getElementById(`${type}Loading`).classList.remove('show');
+        }
+
+        function showError(type, message) {
+            const errorEl = document.getElementById(`${type}Error`);
+            errorEl.textContent = `Error: ${message}`;
+            errorEl.classList.add('show');
+        }
+
+        function clearError(type) {
+            const errorEl = document.getElementById(`${type}Error`);
+            errorEl.classList.remove('show');
+        }
+    </script>
+</body>
+</html>
+
