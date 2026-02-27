@@ -252,6 +252,31 @@
             margin: 5px 0;
         }
 
+        .tournament-button {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: auto;
+        }
+
+        .tournament-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .tournament-button:active {
+            transform: translateY(0);
+        }
+
         @media (max-width: 768px) {
             .forms-section {
                 grid-template-columns: 1fr;
@@ -484,6 +509,36 @@
                 }
             }
 
+            // Get date minus 1 day for gotquestions link
+            function getDateMinusOneDay(dateString) {
+                if (!dateString) return '';
+                try {
+                    const date = new Date(dateString);
+                    if (isNaN(date.getTime())) return '';
+
+                    // Subtract 1 day
+                    date.setDate(date.getDate() - 1);
+
+                    // Format as YYYY-MM-DD
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+
+                    return `${year}-${month}-${day}`;
+                } catch (e) {
+                    return '';
+                }
+            }
+
+            // Remove (асинхрон/онлайн) and (синхрон) from tournament name
+            function cleanTournamentName(name) {
+                if (!name) return '';
+                return name
+                    .replace(/\s*\(асинхрон\/онлайн\)\s*/gi, '')
+                    .replace(/\s*\(синхрон\)\s*/gi, '')
+                    .trim();
+            }
+
             // Get newest and oldest dates
             const tournamentsWithDate = tournaments.filter(t => t.dateEnd);
             const newest = tournamentsWithDate.length > 0 ? formatDate(tournamentsWithDate[0].dateEnd) : 'N/A';
@@ -491,16 +546,36 @@
 
             const html = `
                 <ul class="result-list">
-                    ${tournaments.map(tournament => `
+                    ${tournaments.map(tournament => {
+                        const cleanedName = cleanTournamentName(tournament.name);
+                        const startDateMinusOne = getDateMinusOneDay(tournament.dateStart);
+                        const gotQuestionsUrl = `https://gotquestions.online/search?search=${encodeURIComponent(cleanedName)}&type=packs&page=1&startPlayed=${startDateMinusOne}`;
+
+                        return `
                         <li class="result-item">
                             <a href="https://rating.chgk.gg/b/tournament/${tournament.id}" target="_blank" class="player-link">
                                 ${tournament.id} ${tournament.name}
                             </a>
                             <div class="item-detail">
-                                ${formatDate(tournament.dateEnd)}
+                                <strong>Дата окончания:</strong> ${formatDate(tournament.dateEnd)}
                             </div>
+                            ${tournament.trueDL !== undefined ? `
+                            <div class="item-detail">
+                                <strong>True DL:</strong> ${tournament.trueDL}
+                            </div>
+                            ` : ''}
+                            ${tournament.difficultyForecast !== undefined ? `
+                            <div class="item-detail">
+                                <strong>Прогноз сложности:</strong> ${tournament.difficultyForecast}
+                            </div>
+                            ` : ''}
+                            ${startDateMinusOne ? `
+                            <div class="item-detail">
+                                <a href="${gotQuestionsUrl}" target="_blank">Поискать на GotQuestions</a>
+                            </div>
+                            ` : ''}
                         </li>
-                    `).join('')}
+                    `}).join('')}
                 </ul>
                 <div class="stats">
                     <div class="stats-item"><strong>Всего:</strong> ${tournaments.length}</div>
