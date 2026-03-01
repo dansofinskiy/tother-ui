@@ -1,0 +1,37 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.kotlin.jvm' version '2.0.21'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.amazonaws:aws-lambda-java-core:1.2.2'
+    implementation 'com.amazonaws:aws-lambda-java-events:3.11.0'
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+sourceCompatibility = 21
+targetCompatibility = 21
+
+kotlin {
+    jvmToolchain(21)
+}
+
+// Configure the shadow JAR task
+shadowJar {
+    archiveBaseName.set('TotherFunction')
+    archiveClassifier.set('')
+    archiveVersion.set('')
+}
+
+// Make build depend on shadowJar
+build.dependsOn shadowJar
+
+
