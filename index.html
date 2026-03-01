@@ -709,7 +709,7 @@
                     <a href="https://rating.chgk.gg/b/player/${player.id}" target="_blank" class="player-link">
                         ${player.id} ${player.surname} ${player.name} ${player.patronymic || ''}
                     </a>
-                    <button type="button" class="copy-id-btn" data-player-id="${player.id}" title="Скопировать ID редактора" aria-label="Скопировать ID редактора">⧉</button>
+                    <button type="button" class="copy-id-btn" data-player-id="${player.id}" title="Скопировать ID" aria-label="Скопировать ID">⧉</button>
                 </li>
             `).join('');
 
@@ -731,10 +731,25 @@
             // Wire copy buttons (for newly added items)
             listContainer.querySelectorAll('.copy-id-btn').forEach(button => {
                 button.addEventListener('click', () => {
-                    const editorIdField = document.getElementById('editorId');
-                    const playerId = button.getAttribute('data-player-id');
-                    editorIdField.value = playerId;
-                    editorIdField.focus();
+                    const isEditor = document.getElementById('isEditor').checked;
+
+                    if (isEditor) {
+                        // If searching for editors, put ID in "ID редактора" field
+                        const editorIdField = document.getElementById('editorId');
+                        const playerId = button.getAttribute('data-player-id');
+                        editorIdField.value = playerId;
+                        editorIdField.focus();
+                        // Trigger change event to activate search button
+                        editorIdField.dispatchEvent(new Event('change', { bubbles: true }));
+                    } else {
+                        // If searching for players, put ID in "Ваш ID" field
+                        const playerIdField = document.getElementById('playerId');
+                        const playerId = button.getAttribute('data-player-id');
+                        playerIdField.value = playerId;
+                        playerIdField.focus();
+                        // Trigger change event to activate search button
+                        playerIdField.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
                 });
             });
         }
