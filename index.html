@@ -98,6 +98,24 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+        }
+
         button {
             width: 100%;
             padding: 12px;
@@ -120,6 +138,19 @@
             transform: translateY(0);
         }
 
+        .load-more-btn {
+            margin-top: 15px;
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            opacity: 0.8;
+            font-size: 0.9em;
+            padding: 10px;
+        }
+
+        .load-more-btn:hover {
+            opacity: 1;
+        }
+
         .loading {
             display: none;
             text-align: center;
@@ -129,7 +160,7 @@
         }
 
         .loading.show {
-            display: block;
+            display: block !important;
         }
 
         .error {
@@ -142,6 +173,20 @@
         }
 
         .error.show {
+            display: block;
+        }
+
+        .notification {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            display: none;
+            border-left: 4px solid #4caf50;
+        }
+
+        .notification.show {
             display: block;
         }
 
@@ -244,6 +289,7 @@
             padding: 15px;
             border-radius: 5px;
             margin-top: 15px;
+            margin-bottom: 20px;
             font-size: 0.95em;
             color: #555;
         }
@@ -315,17 +361,25 @@
         <div class="forms-section">
             <!-- Form 1: Player Search -->
             <div class="form-card">
-                <h2>🔍 Поиск ID по фамилии</h2>
+                <h2>🔍 Поиск ID</h2>
                 <form id="playerForm">
                     <div class="form-group">
-                        <label for="surname">Фамилия</label>
+                        <label for="surname">Игрок</label>
                         <input
                             type="text"
                             id="surname"
                             name="surname"
-                            placeholder="e.g., Рождествин"
+                            placeholder="e.g., Рождествин или Иванов Михаил"
                             required
                         >
+                    </div>
+                    <div class="checkbox-group">
+                        <input
+                            type="checkbox"
+                            id="isEditor"
+                            name="isEditor"
+                        >
+                        <label for="isEditor">Только редакторы</label>
                     </div>
                     <button type="submit">Искать</button>
                 </form>
@@ -338,6 +392,13 @@
                 <div class="results-container" id="playerResultsContainer">
                     <h3>Результат</h3>
                     <div id="playersResultsList"></div>
+                    <button type="button" id="loadMorePlayersBtn" class="load-more-btn" style="display: none;">
+                        ➕ Искать ещё
+                    </button>
+                    <div class="loading" id="playerLoadingBottom" style="display: none;">
+                        <span class="spinner"></span>Поиск...
+                    </div>
+                    <div class="notification" id="playerNotification"></div>
                 </div>
             </div>
 
@@ -376,6 +437,13 @@
                 <div class="results-container" id="tournamentResultsContainer">
                     <h3>Результаты</h3>
                     <div id="tournamentsResultsList"></div>
+                    <button type="button" id="loadMoreTournamentsBtn" class="load-more-btn" style="display: none;">
+                        ➕ Искать ещё
+                    </button>
+                    <div class="loading" id="intersectionLoadingBottom" style="display: none;">
+                        <span class="spinner"></span>Поиск...
+                    </div>
+                    <div class="notification" id="intersectionNotification"></div>
                 </div>
             </div>
         </div>
@@ -384,93 +452,283 @@
     <script>
         const API_URL = 'https://jmdw1qbyh8.execute-api.eu-north-1.amazonaws.com/tother-app'; // Change this to your Lambda API endpoint
 
+        // State for player search pagination
+        let currentPlayerPage = 1;
+        let currentPlayerQuery = {
+            surname: '',
+            name: null,
+            isEditor: false
+        };
+
+        // State for tournament intersection pagination
+        let currentTournamentPage = 1;
+        let currentTournamentQuery = {
+            playerId: 0,
+            editorId: 0
+        };
+
+        // Track if search buttons can be clicked
+        let playerSearchDirty = false;
+        let intersectionSearchDirty = false;
+
         // Player Form Handler
         document.getElementById('playerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const surname = document.getElementById('surname').value;
+
+            // Reset pagination and clear previous results
+            currentPlayerPage = 1;
+            const inputText = document.getElementById('surname').value.trim();
+            const isEditor = document.getElementById('isEditor').checked;
+
+            // Split input by space - first word is surname, second is name
+            const parts = inputText.split(/\s+/);
+            const surname = parts[0];
+            const name = parts.length > 1 ? parts[1] : null;
+
+            // Store current query for pagination
+            currentPlayerQuery = { surname, name, isEditor };
+
+            // Reset dirty flag after successful search
+            playerSearchDirty = false;
+            updatePlayerSearchButton();
 
             showLoading('player');
             clearError('player');
+            clearNotification('player');
 
             try {
-                // Properly encode the Cyrillic surname
-                const url = new URL(API_URL);
-                url.searchParams.append('surname', surname);
+                const players = await fetchPlayers(surname, name, isEditor, currentPlayerPage);
+                displayPlayers(players, false); // false = replace results
 
-                const response = await fetch(url.toString());
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Show "search more" button if we got results
+                const loadMoreBtn = document.getElementById('loadMorePlayersBtn');
+                if (players && players.length > 0) {
+                    loadMoreBtn.style.display = 'block';
+                } else {
+                    loadMoreBtn.style.display = 'none';
                 }
-
-                const data = await response.json();
-                displayPlayers(data);
             } catch (error) {
                 showError('player', error.message);
                 displayPlayers([]);
+                document.getElementById('loadMorePlayersBtn').style.display = 'none';
             } finally {
                 hideLoading('player');
             }
         });
 
+        // Player input change listener
+        document.getElementById('surname').addEventListener('change', () => {
+            playerSearchDirty = true;
+            updatePlayerSearchButton();
+        });
+
+        document.getElementById('isEditor').addEventListener('change', () => {
+            playerSearchDirty = true;
+            updatePlayerSearchButton();
+        });
+
+        function updatePlayerSearchButton() {
+            const button = document.querySelector('#playerForm button[type="submit"]');
+            if (playerSearchDirty === false) {
+                button.disabled = true;
+                button.style.display = 'none';
+            } else {
+                button.disabled = false;
+                button.style.display = 'block';
+            }
+        }
+
+        // Intersection input change listeners
+        document.getElementById('playerId').addEventListener('change', () => {
+            intersectionSearchDirty = true;
+            updateIntersectionSearchButton();
+        });
+
+        document.getElementById('editorId').addEventListener('change', () => {
+            intersectionSearchDirty = true;
+            updateIntersectionSearchButton();
+        });
+
+        function updateIntersectionSearchButton() {
+            const button = document.querySelector('#intersectionForm button[type="submit"]');
+            button.disabled = intersectionSearchDirty === false;
+            button.style.opacity = intersectionSearchDirty === false ? '0.5' : '1';
+            button.style.cursor = intersectionSearchDirty === false ? 'not-allowed' : 'pointer';
+        }
+
+
+        // Load More Players Handler
+        document.getElementById('loadMorePlayersBtn').addEventListener('click', async () => {
+            currentPlayerPage++;
+
+            showLoading('player', true); // true = load more mode
+            clearError('player');
+            clearNotification('player');
+
+            try {
+                const players = await fetchPlayers(
+                    currentPlayerQuery.surname,
+                    currentPlayerQuery.name,
+                    currentPlayerQuery.isEditor,
+                    currentPlayerPage
+                );
+
+                if (players && players.length > 0) {
+                    displayPlayers(players, true); // true = append results
+                } else {
+                    // No more results - show notification and hide the button
+                    document.getElementById('loadMorePlayersBtn').style.display = 'none';
+                    showNotification('player', 'Больше результатов нет');
+                }
+            } catch (error) {
+                showError('player', error.message);
+            } finally {
+                hideLoading('player', true); // true = load more mode
+            }
+        });
+
+        // Fetch players from API
+        async function fetchPlayers(surname, name, isEditor, page) {
+            const url = new URL(API_URL);
+            url.searchParams.append('surname', surname);
+            if (name) {
+                url.searchParams.append('name', name);
+            }
+            url.searchParams.append('page', page);
+            url.searchParams.append('isEditor', isEditor);
+
+            const response = await fetch(url.toString());
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return await response.json();
+        }
+
         // Intersection Form Handler
         document.getElementById('intersectionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const playerId = document.getElementById('playerId').value;
-            const editorId = document.getElementById('editorId').value;
+
+            // Reset pagination
+            currentTournamentPage = 1;
+            const playerId = parseInt(document.getElementById('playerId').value);
+            const editorId = parseInt(document.getElementById('editorId').value);
+
+            // Store current query for pagination
+            currentTournamentQuery = { playerId, editorId };
+
+            // Reset dirty flag after successful search
+            intersectionSearchDirty = false;
+            updateIntersectionSearchButton();
 
             showLoading('intersection');
             clearError('intersection');
+            clearNotification('intersection');
 
             try {
-                const url = new URL(API_URL);
-                url.searchParams.append('playerId', playerId);
-                url.searchParams.append('editorId', editorId);
+                const tournaments = await fetchTournaments(playerId, editorId, currentTournamentPage);
+                displayTournaments(tournaments, false); // false = replace results
 
-                const response = await fetch(url.toString());
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Show "search more" button if we got results
+                const loadMoreBtn = document.getElementById('loadMoreTournamentsBtn');
+                if (tournaments && tournaments.length > 0) {
+                    loadMoreBtn.style.display = 'block';
+                } else {
+                    loadMoreBtn.style.display = 'none';
                 }
-
-                const data = await response.json();
-                displayTournaments(data);
             } catch (error) {
                 showError('intersection', error.message);
                 displayTournaments([]);
+                document.getElementById('loadMoreTournamentsBtn').style.display = 'none';
             } finally {
                 hideLoading('intersection');
             }
         });
 
+        // Load More Tournaments Handler
+        document.getElementById('loadMoreTournamentsBtn').addEventListener('click', async () => {
+            currentTournamentPage++;
+
+            showLoading('intersection', true); // true = load more mode
+            clearError('intersection');
+            clearNotification('intersection');
+
+            try {
+                const tournaments = await fetchTournaments(
+                    currentTournamentQuery.playerId,
+                    currentTournamentQuery.editorId,
+                    currentTournamentPage
+                );
+
+                if (tournaments && tournaments.length > 0) {
+                    displayTournaments(tournaments, true); // true = append results
+                } else {
+                    // No more results - show notification and hide the button
+                    document.getElementById('loadMoreTournamentsBtn').style.display = 'none';
+                    showNotification('intersection', 'Больше результатов нет');
+                }
+            } catch (error) {
+                showError('intersection', error.message);
+            } finally {
+                hideLoading('intersection', true); // true = load more mode
+            }
+        });
+
+        // Fetch tournaments from API
+        async function fetchTournaments(playerId, editorId, page) {
+            const url = new URL(API_URL);
+            url.searchParams.append('playerId', playerId);
+            url.searchParams.append('editorId', editorId);
+            url.searchParams.append('page', page);
+
+            const response = await fetch(url.toString());
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return await response.json();
+        }
+
         // Display Players
-        function displayPlayers(players) {
+        function displayPlayers(players, append = false) {
             const container = document.getElementById('playerResultsContainer');
             const listContainer = document.getElementById('playersResultsList');
 
             if (!Array.isArray(players) || players.length === 0) {
-                listContainer.innerHTML = '<div class="no-results">No players found</div>';
-                container.classList.add('show');
+                if (!append) {
+                    listContainer.innerHTML = '<div class="no-results">No players found</div>';
+                    container.classList.add('show');
+                }
                 return;
             }
 
-            const html = `
-                <ul class="result-list">
-                    ${players.map(player => `
-                        <li class="result-item player-row">
-                            <a href="https://rating.chgk.gg/b/player/${player.id}" target="_blank" class="player-link">
-                                ${player.id} ${player.surname} ${player.name} ${player.patronymic || ''}
-                            </a>
-                            <button type="button" class="copy-id-btn" data-player-id="${player.id}" title="Скопировать ID редактора" aria-label="Скопировать ID редактора">⧉</button>
-                        </li>
-                    `).join('')}
-                </ul>
-            `;
+            const playersHtml = players.map(player => `
+                <li class="result-item player-row">
+                    <a href="https://rating.chgk.gg/b/player/${player.id}" target="_blank" class="player-link">
+                        ${player.id} ${player.surname} ${player.name} ${player.patronymic || ''}
+                    </a>
+                    <button type="button" class="copy-id-btn" data-player-id="${player.id}" title="Скопировать ID редактора" aria-label="Скопировать ID редактора">⧉</button>
+                </li>
+            `).join('');
 
-            listContainer.innerHTML = html;
+            if (append) {
+                // Append to existing list
+                const existingList = listContainer.querySelector('.result-list');
+                if (existingList) {
+                    existingList.insertAdjacentHTML('beforeend', playersHtml);
+                } else {
+                    listContainer.innerHTML = `<ul class="result-list">${playersHtml}</ul>`;
+                }
+            } else {
+                // Replace entire list
+                listContainer.innerHTML = `<ul class="result-list">${playersHtml}</ul>`;
+            }
+
             container.classList.add('show');
 
-            // Wire copy buttons
+            // Wire copy buttons (for newly added items)
             listContainer.querySelectorAll('.copy-id-btn').forEach(button => {
                 button.addEventListener('click', () => {
                     const editorIdField = document.getElementById('editorId');
@@ -482,13 +740,15 @@
         }
 
         // Display Tournaments
-        function displayTournaments(tournaments) {
+        function displayTournaments(tournaments, append = false) {
             const container = document.getElementById('tournamentResultsContainer');
             const listContainer = document.getElementById('tournamentsResultsList');
 
             if (!Array.isArray(tournaments) || tournaments.length === 0) {
-                listContainer.innerHTML = '<div class="no-results">Вы не сыграли ни одного турнира :(</div>';
-                container.classList.add('show');
+                if (!append) {
+                    listContainer.innerHTML = '<div class="no-results">Вы не сыграли ни одного турнира :(</div>';
+                    container.classList.add('show');
+                }
                 return;
             }
 
@@ -539,62 +799,107 @@
                     .trim();
             }
 
-            // Get newest and oldest dates
-            const tournamentsWithDate = tournaments.filter(t => t.dateEnd);
-            const newest = tournamentsWithDate.length > 0 ? formatDate(tournamentsWithDate[0].dateEnd) : 'N/A';
-            const oldest = tournamentsWithDate.length > 0 ? formatDate(tournamentsWithDate[tournamentsWithDate.length - 1].dateEnd) : 'N/A';
+            const tournamentsHtml = tournaments.map(tournament => {
+                const cleanedName = cleanTournamentName(tournament.name);
+                const startDateMinusOne = getDateMinusOneDay(tournament.dateStart);
+                const gotQuestionsUrl = `https://gotquestions.online/search?search=${encodeURIComponent(cleanedName)}&type=packs&page=1&startPlayed=${startDateMinusOne}`;
 
-            const html = `
-                <ul class="result-list">
-                    ${tournaments.map(tournament => {
-                        const cleanedName = cleanTournamentName(tournament.name);
-                        const startDateMinusOne = getDateMinusOneDay(tournament.dateStart);
-                        const gotQuestionsUrl = `https://gotquestions.online/search?search=${encodeURIComponent(cleanedName)}&type=packs&page=1&startPlayed=${startDateMinusOne}`;
+                return `
+                <li class="result-item">
+                    <a href="https://rating.chgk.gg/b/tournament/${tournament.id}" target="_blank" class="player-link">
+                        ${tournament.id} ${tournament.name}
+                    </a>
+                    <div class="item-detail">
+                        <strong>Дата окончания:</strong> ${formatDate(tournament.dateEnd)}
+                    </div>
+                    ${tournament.trueDL !== undefined ? `
+                    <div class="item-detail">
+                        <strong>True DL:</strong> ${tournament.trueDL}
+                    </div>
+                    ` : ''}
+                    ${tournament.difficultyForecast !== undefined ? `
+                    <div class="item-detail">
+                        <strong>Прогноз сложности:</strong> ${tournament.difficultyForecast}
+                    </div>
+                    ` : ''}
+                    ${startDateMinusOne ? `
+                    <div class="item-detail">
+                        <a href="${gotQuestionsUrl}" target="_blank">Поискать на GotQuestions</a>
+                    </div>
+                    ` : ''}
+                </li>
+            `}).join('');
 
-                        return `
-                        <li class="result-item">
-                            <a href="https://rating.chgk.gg/b/tournament/${tournament.id}" target="_blank" class="player-link">
-                                ${tournament.id} ${tournament.name}
-                            </a>
-                            <div class="item-detail">
-                                <strong>Дата окончания:</strong> ${formatDate(tournament.dateEnd)}
-                            </div>
-                            ${tournament.trueDL !== undefined ? `
-                            <div class="item-detail">
-                                <strong>True DL:</strong> ${tournament.trueDL}
-                            </div>
-                            ` : ''}
-                            ${tournament.difficultyForecast !== undefined ? `
-                            <div class="item-detail">
-                                <strong>Прогноз сложности:</strong> ${tournament.difficultyForecast}
-                            </div>
-                            ` : ''}
-                            ${startDateMinusOne ? `
-                            <div class="item-detail">
-                                <a href="${gotQuestionsUrl}" target="_blank">Поискать на GotQuestions</a>
-                            </div>
-                            ` : ''}
-                        </li>
-                    `}).join('')}
-                </ul>
-                <div class="stats">
-                    <div class="stats-item"><strong>Всего:</strong> ${tournaments.length}</div>
-                    <div class="stats-item"><strong>Последний:</strong> ${newest}</div>
-                    <div class="stats-item"><strong>Первый:</strong> ${oldest}</div>
-                </div>
-            `;
+            if (append) {
+                // Append to existing list
+                const existingList = listContainer.querySelector('.result-list');
+                if (existingList) {
+                    existingList.insertAdjacentHTML('beforeend', tournamentsHtml);
+                }
 
-            listContainer.innerHTML = html;
+                // Update stats
+                const existingStats = listContainer.querySelector('.stats');
+                if (existingStats) {
+                    // Get all tournaments from the list to recalculate stats
+                    const allTournamentElements = listContainer.querySelectorAll('.result-item');
+                    const totalCount = allTournamentElements.length;
+
+                    // Update total count
+                    const totalItem = existingStats.querySelector('.stats-item:first-child strong');
+                    if (totalItem && totalItem.nextSibling) {
+                        totalItem.nextSibling.textContent = ` ${totalCount}`;
+                    }
+
+                    // Update oldest date (newest stays the same as it's first)
+                    const tournamentsWithDate = tournaments.filter(t => t.dateEnd);
+                    if (tournamentsWithDate.length > 0) {
+                        const oldestNew = formatDate(tournamentsWithDate[tournamentsWithDate.length - 1].dateEnd);
+                        const oldestItem = existingStats.querySelector('.stats-item:last-child strong');
+                        if (oldestItem && oldestItem.nextSibling) {
+                            oldestItem.nextSibling.textContent = ` ${oldestNew}`;
+                        }
+                    }
+                }
+            } else {
+                // Get newest and oldest dates
+                const tournamentsWithDate = tournaments.filter(t => t.dateEnd);
+                const newest = tournamentsWithDate.length > 0 ? formatDate(tournamentsWithDate[0].dateEnd) : 'N/A';
+                const oldest = tournamentsWithDate.length > 0 ? formatDate(tournamentsWithDate[tournamentsWithDate.length - 1].dateEnd) : 'N/A';
+
+                // Replace entire content - stats on top
+                const html = `
+                    <div class="stats">
+                        <div class="stats-item"><strong>Всего:</strong> ${tournaments.length}</div>
+                        <div class="stats-item"><strong>Последний:</strong> ${newest}</div>
+                        <div class="stats-item"><strong>Первый:</strong> ${oldest}</div>
+                    </div>
+                    <ul class="result-list">
+                        ${tournamentsHtml}
+                    </ul>
+                `;
+                listContainer.innerHTML = html;
+            }
+
             container.classList.add('show');
         }
 
         // UI Helpers
-        function showLoading(type) {
-            document.getElementById(`${type}Loading`).classList.add('show');
+        function showLoading(type, isLoadMore = false) {
+            if (isLoadMore) {
+                // Для "Искать ещё" показываем спиннер внизу
+                document.getElementById(`${type}LoadingBottom`).classList.add('show');
+            } else {
+                // Для первого поиска показываем спиннер вверху
+                document.getElementById(`${type}Loading`).classList.add('show');
+            }
         }
 
-        function hideLoading(type) {
-            document.getElementById(`${type}Loading`).classList.remove('show');
+        function hideLoading(type, isLoadMore = false) {
+            if (isLoadMore) {
+                document.getElementById(`${type}LoadingBottom`).classList.remove('show');
+            } else {
+                document.getElementById(`${type}Loading`).classList.remove('show');
+            }
         }
 
         function showError(type, message) {
@@ -606,6 +911,17 @@
         function clearError(type) {
             const errorEl = document.getElementById(`${type}Error`);
             errorEl.classList.remove('show');
+        }
+
+        function showNotification(type, message) {
+            const notificationEl = document.getElementById(`${type}Notification`);
+            notificationEl.textContent = message;
+            notificationEl.classList.add('show');
+        }
+
+        function clearNotification(type) {
+            const notificationEl = document.getElementById(`${type}Notification`);
+            notificationEl.classList.remove('show');
         }
     </script>
 </body>

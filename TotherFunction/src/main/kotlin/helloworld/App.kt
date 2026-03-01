@@ -56,8 +56,11 @@ class App : RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseE
                             .withStatusCode(400)
                             .withBody(gson.toJson(mapOf("error" to "editorId must be a valid integer")))
 
+                    // Extract optional page parameter
+                    val page = queryParams["page"]?.toIntOrNull() ?: 1
+
                     // Get intersection of edited and played tournaments, sorted by date
-                    val tournaments = playerService.getEditedAndPlayedTournaments(playerId, editorId)
+                    val tournaments = playerService.getEditedAndPlayedTournaments(playerId, editorId, page)
                     val output = playerService.formatTournamentsAsJson(tournaments)
 
                     response
@@ -75,8 +78,13 @@ class App : RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseE
                             .withBody(gson.toJson(mapOf("error" to "surname parameter cannot be empty")))
                     }
 
-                    // Fetch players by surname
-                    val players = playerService.getPlayersBySurname(surname)
+                    // Extract optional parameters
+                    val name = queryParams["name"]?.takeIf { it.isNotBlank() }
+                    val page = queryParams["page"]?.toIntOrNull() ?: 1
+                    val isEditor = queryParams["isEditor"]?.toBoolean() ?: false
+
+                    // Fetch players by surname with optional filters
+                    val players = playerService.getPlayersBySurname(surname, name, page, isEditor)
                     val output = playerService.formatPlayersAsJson(players)
 
                     response

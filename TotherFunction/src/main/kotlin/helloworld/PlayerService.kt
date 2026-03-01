@@ -15,7 +15,8 @@ data class Player(
     val id: Int,
     val surname: String,
     val name: String,
-    val patronymic: String?
+    val patronymic: String?,
+    val gotQuestionsTag: String?
 )
 
 /**
@@ -49,52 +50,47 @@ class PlayerService {
     private val tournamentsItemsPerPage = System.getenv("TOURNAMENTS_ITEMS_PER_PAGE")?.toIntOrNull() ?: 100
 
     /**
-     * Fetches players by surname from the API with pagination support
+     * Fetches players by surname from the API
      * @param surname The surname to search for (in Cyrillic)
-     * @return List of players matching the surname (all pages)
+     * @param name Optional name to filter results (if provided, adds name query parameter)
+     * @param page The page number to fetch (default 1)
+     * @param isEditor If true, filter only players with non-null gotQuestionsTag (default false)
+     * @return List of players matching the surname and filters
      * @throws IOException if the request fails
      */
-    fun getPlayersBySurname(surname: String): List<Player> {
-        val allPlayers = mutableListOf<Player>()
-        var currentPage = 1
+    fun getPlayersBySurname(surname: String, name: String? = null, page: Int = 1, isEditor: Boolean = false): List<Player> {
+        val encodedSurname = URLEncoder.encode(surname, StandardCharsets.UTF_8.toString())
+        var url = "$baseUrl/players?surname=$encodedSurname&itemsPerPage=$playersItemsPerPage&page=$page"
 
-        while (true) {
-            val encodedSurname = URLEncoder.encode(surname, StandardCharsets.UTF_8.toString())
-            val url = "$baseUrl/players?surname=$encodedSurname&itemsPerPage=$playersItemsPerPage&page=$currentPage"
-
-            val request = Request.Builder()
-                .url(url)
-                .get()
-                .build()
-
-            val players = client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IOException("Unexpected response code: ${response.code}")
-                }
-
-                val responseBody = response.body?.string()
-                    ?: throw IOException("Empty response body")
-
-                val listType = object : TypeToken<List<Player>>() {}.type
-                gson.fromJson<List<Player>>(responseBody, listType)
-            }
-
-            // If no players returned, we've reached the end
-            if (players.isEmpty()) {
-                break
-            }
-
-            allPlayers.addAll(players)
-
-            // If we got fewer than itemsPerPage, this is the last page
-            if (players.size < playersItemsPerPage) {
-                break
-            }
-
-            currentPage++
+        // Add name parameter if provided
+        if (!name.isNullOrBlank()) {
+            val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8.toString())
+            url += "&name=$encodedName"
         }
 
-        return allPlayers
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+
+        val players = client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("Unexpected response code: ${response.code}")
+            }
+
+            val responseBody = response.body?.string()
+                ?: throw IOException("Empty response body")
+
+            val listType = object : TypeToken<List<Player>>() {}.type
+            gson.fromJson<List<Player>>(responseBody, listType)
+        }
+
+        // Filter by gotQuestionsTag if isEditor is true
+        return if (isEditor) {
+            players.filter { it.gotQuestionsTag != null }
+        } else {
+            players
+        }
     }
 
     /**
@@ -125,51 +121,31 @@ class PlayerService {
     }
 
     /**
-     * Fetches tournaments by editor ID with pagination support
+     * Fetches tournaments by editor ID
      * @param editorId The ID of the editor
-     * @return List of tournaments edited by the specified editor (all pages)
+     * @param page The page number to fetch (default 1)
+     * @return List of tournaments edited by the specified editor for the given page
      * @throws IOException if the request fails
      */
-    fun getTournamentsByEditor(editorId: Int): List<Tournament> {
-        val allTournaments = mutableListOf<Tournament>()
-        var currentPage = 1
+    fun getTournamentsByEditor(editorId: Int, page: Int = 1): List<Tournament> {
+        val url = "$baseUrl/tournaments?editor=$editorId&order[lastEditDate]=desc&itemsPerPage=$tournamentsItemsPerPage&page=$page"
 
-        while (true) {
-            val url = "$baseUrl/tournaments?editor=$editorId&order[lastEditDate]=desc&itemsPerPage=$tournamentsItemsPerPage&page=$currentPage"
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
 
-            val request = Request.Builder()
-                .url(url)
-                .get()
-                .build()
-
-            val tournaments = client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IOException("Unexpected response code: ${response.code}")
-                }
-
-                val responseBody = response.body?.string()
-                    ?: throw IOException("Empty response body")
-
-                val listType = object : TypeToken<List<Tournament>>() {}.type
-                gson.fromJson<List<Tournament>>(responseBody, listType)
+        return client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("Unexpected response code: ${response.code}")
             }
 
-            // If no tournaments returned, we've reached the end
-            if (tournaments.isEmpty()) {
-                break
-            }
+            val responseBody = response.body?.string()
+                ?: throw IOException("Empty response body")
 
-            allTournaments.addAll(tournaments)
-
-            // If we got fewer than itemsPerPage, this is the last page
-            if (tournaments.size < tournamentsItemsPerPage) {
-                break
-            }
-
-            currentPage++
+            val listType = object : TypeToken<List<Tournament>>() {}.type
+            gson.fromJson<List<Tournament>>(responseBody, listType)
         }
-
-        return allTournaments
     }
 
     /**
@@ -178,12 +154,13 @@ class PlayerService {
      *
      * @param playerId The ID of the player
      * @param editorId The ID of the editor
+     * @param page The page number to fetch (default 1)
      * @return List of tournaments that match both criteria, sorted by dateEnd descending
      * @throws IOException if the request fails
      */
-    fun getEditedAndPlayedTournaments(playerId: Int, editorId: Int): List<Tournament> {
+    fun getEditedAndPlayedTournaments(playerId: Int, editorId: Int, page: Int = 1): List<Tournament> {
         // Fetch both lists
-        val editedTournaments = getTournamentsByEditor(editorId)
+        val editedTournaments = getTournamentsByEditor(editorId, page)
         val playedTournaments = getPlayerTournaments(playerId)
 
         // Create a set of played tournament IDs for efficient lookup
